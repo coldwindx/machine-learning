@@ -22,5 +22,6 @@
 
 ## 梯度下降
 重复步骤$\theta := \theta - \alpha\frac{\partial{J}}{\partial{\theta}}$，其中$\alpha$为学习率，反应沿梯度下降的步幅。
+$\frac{\partial{J}}{\partial{\theta}}=\frac{1}{m}\sum_{i=1}^m(h(x) - y)x$
 ## 拟合
 - 过拟合：学习能力太强，将训练样本中的非一般特征也学到，导致泛化性下降。过拟合不可消除。
