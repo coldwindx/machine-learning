@@ -7,6 +7,13 @@ from matplotlib import pyplot as plt
 import numpy as np
 
 # 定义损失函数和梯度下降算法
+def mean_normalization(x):
+    mean = np.mean(x, axis=0)
+    std = np.std(x, axis=0)
+    for i in range(x.shape[0]):
+        for j in range(x.shape[1]):
+            x[i][j] = (x[i][j] - mean[j]) / std[j]
+    return x
 def compute_cost(x, y, theta):
     m = x.shape[0]
     hypthesis = np.dot(x, np.transpose(theta))
@@ -28,10 +35,11 @@ path = './data_sets/ex1data2.txt'
 data = np.loadtxt(path, delimiter=',')
 x_data = data[:,0:2]
 y_data = data[:,-1:]
-x = np.c_[np.ones(x_data.shape[0]), x_data]
+x = mean_normalization(x_data)
+x = np.c_[np.ones(x_data.shape[0]), x]
 y = np.array(y_data)
-
-# 开始拟合
+print(x)
+# # 开始拟合
 alpha = 0.05
 epoch = 300
 theta, costs = gradient_descent(x, y, alpha, epoch)
