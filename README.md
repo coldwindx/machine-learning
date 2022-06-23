@@ -52,3 +52,8 @@ Cost=\left\{
 - 引入正则化后代价函数：$J(\theta)= J(\theta) + \frac{\lambda}{2m}\sum_{j=1}^{n}\theta^2$，通过正则化缩小某些特征值地系数
 - $\lambda$为正则化参数，过大时会使$\theta$趋于0，导致欠拟合
 - [正则化为什么可以缓解过拟合？](https://zhuanlan.zhihu.com/p/361181741)
+## 多分类问题
+- 为每一类创建一个分类器，进行多次逻辑回归训练
+- 向量化可以避免循环，使训练更高效
+- 引入向量化后，$\frac{\partial{J}}{\partial{\theta}}=\frac{1}{m}X^T(h(x)-y)$
+- 向量化后的梯度更新公式:$\theta_j=\theta_j-\alpha[\frac{1}{m}X^T(h(x)-y)+\frac{\lambda}{m}\theta_j]$
