@@ -33,3 +33,16 @@ $\frac{\partial{J}}{\partial{\theta}}=\frac{1}{m}\sum_{i=1}^m(h(x) - y)x$
 - 正规方程法实际上是直接令$\frac{\partial{J}}{\partial{\theta}}=0$求出最优解$\theta=(X^TX)^{-1}XY$
 - 正规方程法不需要学习率，不需要迭代，但特征量n过大时矩阵的计算成本极高$O(n^3)$，当n>10000时可以考虑其他方法
 - $(X^TX)$矩阵不可逆：存在多余特征或特征数量大于训练集数量
+# 分类问题
+## 逻辑回归
+- 逻辑回归假设函数：$h_{\theta}(x)=g(\theta^Tx)$
+- 使用以上假设函数会导致代价函数$J(\theta)$为非凹函数，影响梯度下降，通常将代价函数定义为$$J(\theta)=\frac{1}{m}\sum_{i=1}^{m}Cost(h(x), y),\\其中
+Cost=\left\{
+        \begin{matrix}
+        -log(h(x)),&if&y=1\\
+        -log(1-h(x)),&if&y=0
+        \end{matrix}
+        \right.$$
+- 简化的Cost函数$Cost=-y\log{h(x)}-(1-y)\log(1-h(x))$
+### 逻辑函数
+- sigmoid函数：$g(z)=\frac{1}{1+e^{-z}}$
