@@ -70,3 +70,8 @@ plt.scatter(np.array(positive)[:, :1],np.array(positive)[:, -1:], marker='.', c=
 plt.scatter(np.array(negative)[:, :1],np.array(negative)[:, -1:], marker='x', c='red')
 plt.plot(plotting_x1, plotting_h1, 'y', label='Prediction')
 plt.show()
+
+# ===================  评价逻辑回归模型  =========================
+def hfunc(theta, x):
+    return sigmoid(np.dot(theta.T, x))
+print('hfunc1(result[0],[1,45,85])={}'.format(hfunc(result[0],[1,45,85])))
