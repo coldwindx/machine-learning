@@ -57,3 +57,4 @@ Cost=\left\{
 - 向量化可以避免循环，使训练更高效
 - 引入向量化后，$\frac{\partial{J}}{\partial{\theta}}=\frac{1}{m}X^T(h(x)-y)$
 - 向量化后的梯度更新公式:$\theta_j=\theta_j-\alpha[\frac{1}{m}X^T(h(x)-y)+\frac{\lambda}{m}\theta_j]$
+# 神经网络
