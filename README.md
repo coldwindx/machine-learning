@@ -43,7 +43,7 @@ Cost=\left\{
         \right.$$
 - 简化的Cost函数$Cost=-y\log{h(x)}-(1-y)\log(1-h(x))$
 ### 逻辑函数
-- sigmoid函数：$g(z)=\frac{1}{1+e^{-z}}$
+- sigmoid函数：$g(z)=\frac{1}{1+e^{-z}}$，导数：$g^`(z)=g(z)(1-g(z))$
 # 过拟合
 - 欠拟合：高偏差，曲线不能很好地贴合样本
 - 过拟合：高方差，曲线为高阶多项式，不够平滑。
@@ -58,3 +58,8 @@ Cost=\left\{
 - 引入向量化后，$\frac{\partial{J}}{\partial{\theta}}=\frac{1}{m}X^T(h(x)-y)$
 - 向量化后的梯度更新公式:$\theta_j=\theta_j-\alpha[\frac{1}{m}X^T(h(x)-y)+\frac{\lambda}{m}\theta_j]$
 # 神经网络
+
+## 反向传播
+- $\delta^{(n)}=(w^{(n)})^T\delta^{(n+1)}g^`(z^{(n)})$
+- $\frac{\partial{J}}{\partial{\Theta^{(l)}_{ij}}}=a_j^{(l)}\delta_i^{(l+1)}$
+- [反向传播推导](https://www.cnblogs.com/jsfantasy/p/12177275.html)
