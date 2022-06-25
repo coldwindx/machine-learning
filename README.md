@@ -63,3 +63,5 @@ Cost=\left\{
 - $\delta^{(n)}=(w^{(n)})^T\delta^{(n+1)}g^`(z^{(n)})$
 - $\frac{\partial{J}}{\partial{\Theta^{(l)}_{ij}}}=a_j^{(l)}\delta_i^{(l+1)}$
 - [反向传播推导](https://www.cnblogs.com/jsfantasy/p/12177275.html)
+
+# 机器学习应用
