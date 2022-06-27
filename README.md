@@ -58,10 +58,14 @@ Cost=\left\{
 - 引入向量化后，$\frac{\partial{J}}{\partial{\theta}}=\frac{1}{m}X^T(h(x)-y)$
 - 向量化后的梯度更新公式:$\theta_j=\theta_j-\alpha[\frac{1}{m}X^T(h(x)-y)+\frac{\lambda}{m}\theta_j]$
 # 神经网络
-
 ## 反向传播
 - $\delta^{(n)}=(w^{(n)})^T\delta^{(n+1)}g^`(z^{(n)})$
 - $\frac{\partial{J}}{\partial{\Theta^{(l)}_{ij}}}=a_j^{(l)}\delta_i^{(l+1)}$
 - [反向传播推导](https://www.cnblogs.com/jsfantasy/p/12177275.html)
 
-# 机器学习应用
+## 模型参数评估
+- [应用机器学习的建议](https://github.com/fengdu78/Coursera-ML-AndrewNg-Notes/blob/master/markdown/week6.md)
+
+# 支持向量机SVM
+- SVM会用尽可能大的间距区分样本
+
