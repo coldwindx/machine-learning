@@ -20,9 +20,12 @@ class Module(torch.nn.Module):
             for x, y in train_iter:
                 y_ = self.forward(x)
                 l = self.loss(y_, y)
+
                 for opt in self.optimizers:
                     opt.zero_grad()
+
                 l.backward()
+                
                 for opt in self.optimizers:
                     opt.step()
       
