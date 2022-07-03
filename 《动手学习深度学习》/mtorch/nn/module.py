@@ -8,8 +8,8 @@ class Module(torch.nn.Module):
     def __init__(self) -> None:
         super(Module, self).__init__()
     
-    def compile(self, optimizer, loss):
-        self.optimizer = optimizer
+    def compile(self, optimizers, loss):
+        self.optimizers = optimizers
         self.loss = loss
 
     def fit(self, data, batch_size, epochs, validation_data):
@@ -20,10 +20,12 @@ class Module(torch.nn.Module):
             for x, y in train_iter:
                 y_ = self.forward(x)
                 l = self.loss(y_, y)
-                self.optimizer.zero_grad()
+                for opt in self.optimizers:
+                    opt.zero_grad()
                 l.backward()
-                self.optimizer.step()
-                
+                for opt in self.optimizers:
+                    opt.step()
+      
                 train_loss_sum += l.sum().item()
                 train_acc_sum += (y_.argmax(dim = 1) == y).sum().item()
                 n += y.shape[0]
