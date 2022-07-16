@@ -1,10 +1,20 @@
-from cProfile import label
 from time import time
 from matplotlib import pyplot as plt
 import numpy as np
 import torch
 import torchvision
+from IPython import display
 
+
+def set_axes(axes, xlabel, ylabel, xlim, ylim, xscale, yscale, legend):
+    """Set the axes for matplotlib.
+    Defined in :numref:`sec_calculus`"""
+    axes.set_xlabel(xlabel), axes.set_ylabel(ylabel)
+    axes.set_xscale(xscale), axes.set_yscale(yscale)
+    axes.set_xlim(xlim),     axes.set_ylim(ylim)
+    if legend:
+        axes.legend(legend)
+    axes.grid()
 
 def corr2d(X, K):
     '''
@@ -64,19 +74,45 @@ class GPU:
         return devices if devices else [torch.device('cpu')]
 
 class Animator:
-    '''简单的曲线绘制封装类'''
-    def __init__(self, xlabel = None, ylabel = None, legend = None,
-                        xlim = None, ylim = None, nrows = 1, ncols = 1) -> None:
-        _, self.axes = plt.subplots(nrows, ncols)
-        self.axes.set_xlim(xlim)
-        self.axes.set_ylim(ylim)
+    """For plotting data in animation."""
+    def __init__(self, xlabel=None, ylabel=None, legend=None, xlim=None,
+                 ylim=None, xscale='linear', yscale='linear',
+                 fmts=('-', 'm--', 'g-.', 'r:'), nrows=1, ncols=1,
+                 figsize=(3.5, 2.5)):
+        """Defined in :numref:`sec_utils`"""
+        # Incrementally plot multiple lines
         if legend is None:
             legend = []
-        plt.legend(legend)
+        self.fig, self.axes = plt.subplots(nrows, ncols, figsize=figsize)
+        if nrows * ncols == 1:
+            self.axes = [self.axes, ]
+        # Use a lambda function to capture arguments
+        self.config_axes = lambda: set_axes(
+            self.axes[0], xlabel, ylabel, xlim, ylim, xscale, yscale, legend)
+        self.X, self.Y, self.fmts = None, None, fmts
+
     def add(self, x, y):
-        self.axes.plot(x, y)
-    def show(self):
-        plt.show()
+        # Add multiple data points into the figure
+        if not hasattr(y, "__len__"):
+            y = [y]
+        n = len(y)
+        if not hasattr(x, "__len__"):
+            x = [x] * n
+        if not self.X:
+            self.X = [[] for _ in range(n)]
+        if not self.Y:
+            self.Y = [[] for _ in range(n)]
+        for i, (a, b) in enumerate(zip(x, y)):
+            if a is not None and b is not None:
+                self.X[i].append(a)
+                self.Y[i].append(b)
+        self.axes[0].cla()
+        for x, y, fmt in zip(self.X, self.Y, self.fmts):
+            self.axes[0].plot(x, y, fmt)
+        self.config_axes()
+        
+        display.display(self.fig)
+        display.clear_output(wait=True)
 
 class Accumulator():
     '''实用程序类Accumulator，用于对多个变量进行累加。'''
@@ -108,4 +144,10 @@ class Timer:
 
 
 if __name__ =='__main__':
-    load_data_fashion_mnist(256)
+    a = Animator(xlabel='epochs', ylabel='metrics', metrics=['m'])
+    # x = [1, 2, 3, 4, 5]
+    # y = [4, 5, 6, 7, 8]
+    a.add(0.1, 0.2, 'm')
+    a.add(2, 3, 'm')
+    # a.show()
+    a.show()
