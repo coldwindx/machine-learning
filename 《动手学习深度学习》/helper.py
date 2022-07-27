@@ -1,9 +1,20 @@
-from time import time
-from matplotlib import pyplot as plt
+import os
+import hashlib
+import requests
 import numpy as np
+
 import torch
 import torchvision
+
+from time import time
+from urllib import request
+from matplotlib import pyplot as plt
+from torch import all
 from IPython import display
+from torchvision import transforms
+
+DATA_HUB = dict()
+DATA_URL = 'http://d2l-data.s3-accelerate.amazonaws.com/'
 
 
 def set_axes(axes, xlabel, ylabel, xlim, ylim, xscale, yscale, legend):
@@ -30,27 +41,62 @@ def corr2d(X, K):
             Y[i, j] = torch.sum(X[i:i + h, j:j + w] * K)
     return Y
 
-def load_data_fashion_mnist(batch_size, path = ""):
-    # 下载数据集
-    mnist_train = torchvision.datasets.FashionMNIST(
-        root = path, train=True, download=True,
-        transform=torchvision.transforms.ToTensor()     # 自动转为torch张量
-    )
-    mnist_test = torchvision.datasets.FashionMNIST(
-        root = path, train=False, download=True,
-        transform=torchvision.transforms.ToTensor()     # 自动转为torch张量
-    )
-    train_iter = torch.utils.data.DataLoader(
-        mnist_train, batch_size=batch_size,
-        shuffle=True,
-        num_workers=0       # 开启num_workers个线程
-    )
-    test_iter = torch.utils.data.DataLoader(
-        mnist_test, batch_size=batch_size,
-        shuffle=True,
-        num_workers=0       # 开启num_workers个线程
-    )
-    return train_iter, test_iter
+class Loader:
+    @staticmethod
+    def load_data_fashion_mnist(batch_size, path = "", resize = None):
+        trans = [transforms.ToTensor()]
+        if resize:
+            trans.insert(0, transforms.Resize(resize))
+        trans = transforms.Compose(trans)
+        # 下载数据集
+        mnist_train = torchvision.datasets.FashionMNIST(
+            root = path, train=True, download=True,
+            transform=trans     # 自动转为torch张量
+        )
+        mnist_test = torchvision.datasets.FashionMNIST(
+            root = path, train=False, download=True,
+            transform=trans     # 自动转为torch张量
+        )
+        train_iter = torch.utils.data.DataLoader(
+            mnist_train, batch_size=batch_size,
+            shuffle=True,
+            num_workers=0       # 开启num_workers个线程
+        )
+        test_iter = torch.utils.data.DataLoader(
+            mnist_test, batch_size=batch_size,
+            shuffle=True,
+            num_workers=0       # 开启num_workers个线程
+        )
+        return train_iter, test_iter
+
+    @staticmethod
+    def load_array(data_arrays, batch_size, shuffle = True):
+        datasets = torch.utils.data.TensorDataset(*data_arrays)
+        return torch.utils.data.DataLoader(datasets, batch_size, shuffle=shuffle)
+    
+    @staticmethod
+    def download(url, folder = '../data', sha1_hash = None):
+        if not url.startswith('http'):
+            url, sha1_hash = DATA_HUB[url]
+        os.makedirs(folder, exist_ok=True)
+        fname = os.path.join(folder, url.split('/')[-1])
+        # check if hit cache
+        if os.path.exists(fname) and sha1_hash:
+            sha1 = hashlib.sha1()
+            with open(fname, 'rb') as f:
+                while True:
+                    data = f.read(1048576)
+                    if not data:
+                        break
+                    sha1.update(data)
+            if sha1.hexdigest() == sha1_hash:
+                return fname
+        # download from url
+        print(f'Downloading {fname} from {url} ...')
+        r = requests.get(url, stream=True, verify=True)
+        with open(fname, 'wb') as f:
+            f.write(r.content)
+        return fname
 
 def accuracy(y_hat, y):
     '''计算预测准确率'''
@@ -111,8 +157,8 @@ class Animator:
             self.axes[0].plot(x, y, fmt)
         self.config_axes()
         
-        display.display(self.fig)
-        display.clear_output(wait=True)
+        # display.display(self.fig)
+        # display.clear_output(wait=True)
 
 class Accumulator():
     '''实用程序类Accumulator，用于对多个变量进行累加。'''
@@ -142,6 +188,73 @@ class Timer:
     def cunsum(self):
         return np.array(self.times).cumsum().tolist()
 
+def evaluate_accuracy_gpu(net, data_iter, device = None):
+    '''使用GPU计算操作模型在数据集上的精度'''
+    if isinstance(net, torch.nn.Module):
+        net.eval() # 切换评估模式
+        if not device:
+            device = next(iter(net.parameters())).device
+    metric = Accumulator(2)
+    with torch.no_grad():
+        for X, y in data_iter:
+            if isinstance(X, list):
+                X = [x.to(device) for x in X]
+            else:
+                X = X.to(device)
+            y = y.to(device)
+            metric.add(accuracy(net(X), y), y.numel())
+    return metric[0] / metric[1]
+
+def train_ch6(net, train_iter, test_iter, num_epochs, lr, device):
+    '''用GPU训练模型'''
+    def init_weight(m):
+        if type(m) == torch.nn.Linear or type(m) == torch.nn.Conv2d:
+            torch.nn.init.xavier_uniform_(m.weight)
+    net.apply(init_weight)
+    print('train on ', device)
+    net.to(device)
+    optimizer = torch.optim.SGD(net.parameters(), lr)
+    loss = torch.nn.CrossEntropyLoss()
+    animator = Animator(xlabel='epochs', xlim = [1, num_epochs],
+                                legend=['train_loss', 'train_acc', 'test_acc'])
+    timer, num_batchs = Timer(), len(train_iter)
+    for epoch in range(num_epochs):
+        metric = Accumulator(3)
+        net.train()
+        for i, (X, y) in enumerate(train_iter):
+            timer.start()
+            optimizer.zero_grad()
+            X, y = X.to(device), y.to(device)
+            y_hat = net(X)
+            l = loss(y_hat, y)
+            l.backward()
+            optimizer.step()
+            with torch.no_grad():       # 不更新梯度
+                metric.add(l * X.shape[0], accuracy(y_hat, y), X.shape[0])
+            timer.stop()
+            train_l = metric[0] / metric[2]
+            train_acc = metric[1] / metric[2]
+            if (i + 1) % (num_batchs // 5) == 0 or i == num_batchs - 1:
+                animator.add(epoch + (i + 1) / num_batchs,
+                                            (train_l, train_acc, None))
+            test_acc = evaluate_accuracy_gpu(net, test_iter)
+            animator.add(epoch + 1, (None, None, test_acc))
+        torch.save(net.state_dict(), 'net.pt')
+        print(f'loss {train_l:.3f}, train acc {train_acc:.3f}, 'f'test acc {test_acc:.3f}')
+        print(f'{metric[2] * num_epochs / timer.sum():.1f} examples/sec 'f'on {str(device)}')
+    plt.savefig('accuracy.png')
+    plt.show()
+
+class Evaluater:
+    @staticmethod
+    def loss(net, data_iter, loss):
+        metric = Accumulator(2) 
+        for X, y in data_iter:
+            out = net(X)
+            y = y.reshape(out.shape)
+            l = loss(out, y)
+            metric.add(l.sum(), l.numel())
+        return metric[0] / metric[1]
 
 if __name__ =='__main__':
     a = Animator(xlabel='epochs', ylabel='metrics', metrics=['m'])
