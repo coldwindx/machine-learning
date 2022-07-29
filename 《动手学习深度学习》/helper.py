@@ -45,6 +45,14 @@ def corr2d(X, K):
             Y[i, j] = torch.sum(X[i:i + h, j:j + w] * K)
     return Y
 
+def sgd(params, lr, batch_size):
+    """Minibatch stochastic gradient descent.
+    Defined in :numref:`sec_utils`"""
+    with torch.no_grad():
+        for param in params:
+            param -= lr * param.grad / batch_size
+            param.grad.zero_()
+
 class Loader:
     @staticmethod
     def load_data_fashion_mnist(batch_size, path = "", resize = None):
@@ -77,8 +85,7 @@ class Loader:
     def load_data_time_machine(batch_size, num_steps,
                             use_random_iter=False, max_tokens=10000):
         """返回时光机器数据集的迭代器和词表"""
-        data_iter = SeqDataLoader(
-            batch_size, num_steps, use_random_iter, max_tokens)
+        data_iter = SeqDataLoader(batch_size, num_steps, use_random_iter, max_tokens)
         return data_iter, data_iter.vocab
 
     @staticmethod
@@ -280,35 +287,31 @@ def count_corpus(tokens):
         tokens = [token for line in tokens for token in line]
     return collections.Counter(tokens)
 
-class Vocab:
-    @staticmethod
-    def tokenize(lines, token = 'word'):
-        if token == 'word':
-            return [line.split() for line in lines]
-        if token == 'char':
-            return [list(line) for line in lines]
-        print('错误：未知词元类型：' + token)
-
-    def __init__(self, tokens, min_freq = 0, reserved_tokens = None) -> None:
+class Vocab:  #@save
+    """文本词表"""
+    def __init__(self, tokens=None, min_freq=0, reserved_tokens=None):
         if tokens is None:
             tokens = []
         if reserved_tokens is None:
             reserved_tokens = []
+        # 按出现频率排序
         counter = count_corpus(tokens)
-        self._token_freqs = sorted(counter.items(), key=lambda x: x[1], reverse=True)
-
+        self._token_freqs = sorted(counter.items(), key=lambda x: x[1],
+                                   reverse=True)
+        # 未知词元的索引为0
         self.idx_to_token = ['<unk>'] + reserved_tokens
-        self.token_to_idx = { token: idx for idx, token in enumerate(self.idx_to_token) }
-
+        self.token_to_idx = {token: idx
+                             for idx, token in enumerate(self.idx_to_token)}
         for token, freq in self._token_freqs:
-            # _token_freqs有序
             if freq < min_freq:
                 break
             if token not in self.token_to_idx:
                 self.idx_to_token.append(token)
                 self.token_to_idx[token] = len(self.idx_to_token) - 1
+
     def __len__(self):
         return len(self.idx_to_token)
+
     def __getitem__(self, tokens):
         if not isinstance(tokens, (list, tuple)):
             return self.token_to_idx.get(tokens, self.unk)
@@ -318,14 +321,25 @@ class Vocab:
         if not isinstance(indices, (list, tuple)):
             return self.idx_to_token[indices]
         return [self.idx_to_token[index] for index in indices]
-    
+
     @property
-    def unk(self):
+    def unk(self):  # 未知词元的索引为0
         return 0
+
     @property
     def token_freqs(self):
         return self._token_freqs
 
+    @staticmethod
+    def tokenize(lines, token='word'):  #@save
+        """将文本行拆分为单词或字符词元"""
+        if token == 'word':
+            return [line.split() for line in lines]
+        elif token == 'char':
+            return [list(line) for line in lines]
+        else:
+            print('错误：未知词元类型：' + token)
+            
 class SeqDataLoader:  #@save
     """加载序列数据的迭代器"""
     def __init__(self, batch_size, num_steps, use_random_iter, max_tokens):
@@ -333,9 +347,13 @@ class SeqDataLoader:  #@save
             self.data_iter_fn = SeqDataLoader._seq_data_iter_random
         else:
             self.data_iter_fn = SeqDataLoader._seq_data_iter_sequential
-        tokens = Vocab.tokenize(Loader.read_time_machine())
-        self.corpus = [token for line in tokens for token in line]
-        self.vocab = Vocab(self.corpus)
+        lines = Loader.read_time_machine()      # 按行读取txt文件，返回一维列表，['第1行','第2行',...,'第n行',...]
+        tokens = Vocab.tokenize(lines, 'char')  # 按字符分割文本行的函数，返回二维列表
+        self.vocab = Vocab(tokens)  # 实例化Vocab类，得到词表
+        # 因为数据集中的每一行文本不一定是一个句子或段落，所以将所有文本行展平到一个列表中
+        self.corpus = [self.vocab[token] for line in tokens for token in line]  # 转换为标记索引
+        if max_tokens > 0:
+            self.corpus =self. corpus[:max_tokens]
         self.batch_size, self.num_steps = batch_size, num_steps
 
     def __iter__(self):
@@ -357,17 +375,88 @@ class SeqDataLoader:  #@save
             yield torch.tensor(X), torch.tensor(Y)
 
     @staticmethod
-    def _seq_data_iter_sequential(corpus, batch_size, num_steps):
+    def _seq_data_iter_sequential(corpus, batch_size, num_steps):  #@save
+        """使用顺序分区生成一个小批量子序列"""
         offset = random.randint(0, num_steps)
         num_tokens = ((len(corpus) - offset - 1) // batch_size) * batch_size
-        Xs = torch.tensor(corpus[offset:offset + num_tokens])
-        Ys = torch.tensor(corpus[offset + 1: offset + num_tokens + 1])
-        Xs, Ys = Xs.reshape((batch_size, -1)), Ys.reshape((batch_size, -1))
-        num_batchs = Xs.shape[1] // num_steps
-        for i in range(0, num_steps * num_batchs, num_steps):
+        Xs = torch.tensor(corpus[offset: offset + num_tokens])
+        Ys = torch.tensor(corpus[offset + 1: offset + 1 + num_tokens])
+        Xs, Ys = Xs.reshape(batch_size, -1), Ys.reshape(batch_size, -1)
+        num_batches = Xs.shape[1] // num_steps
+        for i in range(0, num_steps * num_batches, num_steps):
             X = Xs[:, i: i + num_steps]
             Y = Ys[:, i: i + num_steps]
             yield X, Y
+
+def predict_ch8(prefix, num_preds, net, vocab, device):  #@save
+    """在prefix后面生成新字符"""
+    state = net.begin_state(batch_size=1, device=device)
+    outputs = [vocab[prefix[0]]]
+    get_input = lambda: torch.tensor([outputs[-1]], device=device).reshape((1, 1))
+    for y in prefix[1:]:  # 预热期
+        _, state = net(get_input(), state)
+        outputs.append(vocab[y])
+    for _ in range(num_preds):  # 预测num_preds步
+        y, state = net(get_input(), state)
+        outputs.append(int(y.argmax(dim=1).reshape(1)))
+    return ''.join([vocab.idx_to_token[i] for i in outputs])
+
+# 梯度裁剪
+def grad_clipping(net, theta):
+    if isinstance(net, torch.nn.Module):
+        params = [p for p in net.parameters() if p.requires_grad]
+    else:
+        params = net.params
+    norm = torch.sqrt(sum(torch.sum((p.grad ** 2)) for p in params))
+    if norm > theta:
+        for param in params:
+            param.grad[:] *= theta / norm
+
+import math
+def train_epoch_ch8(net, train_iter, loss, updater, device, use_random_iter):
+    state, timer = None, Timer()
+    metric = Accumulator(2)
+    for X, Y in train_iter:
+        if state is None or use_random_iter:
+            state = net.begin_state(batch_size  = X.shape[0], device=device)
+        else:
+            if isinstance(net, torch.nn.Module) and not isinstance(state, tuple):
+                state.detach_()
+            else:
+                for s in state:
+                    s.detach_()
+        y = Y.T.reshape(-1)
+        X, y = X.to(device), y.to(device)
+        y_hat, state = net(X, state)
+        l = loss(y_hat, y.long()).mean()
+        if isinstance(updater, torch.optim.Optimizer):
+            updater.zero_grad()
+            l.backward()
+            grad_clipping(net, 1)
+            updater.step()
+        else:
+            l.backward()
+            grad_clipping(net, 1)
+            updater(batch_size = 1)
+        metric.add(l * y.numel(), y.numel())
+    return math.exp(metric[0] / metric[1]), metric[1] / timer.stop()
+
+def train_ch8(net, train_iter, vocab, lr, num_epochs, device, use_random_iter = False):
+    loss = torch.nn.CrossEntropyLoss()
+    animator = Animator(xlabel='epoch', ylabel='perplexity', legend=['train'], xlim=[10, num_epochs])
+    if isinstance(net, torch.nn.Module):
+        updater = torch.optim.SGD(net.parameters(), lr)
+    else:
+        updater = lambda batch_size: sgd(net.params, lr, batch_size)
+    predict = lambda prefix: predict_ch8(prefix, 50, net, vocab, device)
+    for epoch in range(num_epochs):
+        ppl, speed = train_epoch_ch8(net, train_iter, loss, updater, device, use_random_iter)
+        if (epoch + 1) % 10 == 0:
+            print(predict('time traveller'))
+            animator.add(epoch + 1, [ppl])
+    print(f'困惑度 {ppl:.1f}, {speed:.1f} 词元/秒 {str(device)}')
+    print(predict('time traveller'))
+    print(predict('traveller'))
 
 if __name__ =='__main__':
     a = Animator(xlabel='epochs', ylabel='metrics', metrics=['m'])
