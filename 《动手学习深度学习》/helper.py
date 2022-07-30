@@ -10,11 +10,9 @@ import torch
 import torchvision
 
 from time import time
-from urllib import request
 from matplotlib import pyplot as plt
-from torch import all
-from IPython import display
 from torchvision import transforms
+from torch.nn import functional as F
 
 DATA_HUB = dict()
 DATA_URL = 'http://d2l-data.s3-accelerate.amazonaws.com/'
@@ -458,11 +456,46 @@ def train_ch8(net, train_iter, vocab, lr, num_epochs, device, use_random_iter = 
     print(predict('time traveller'))
     print(predict('traveller'))
 
-if __name__ =='__main__':
-    a = Animator(xlabel='epochs', ylabel='metrics', metrics=['m'])
-    # x = [1, 2, 3, 4, 5]
-    # y = [4, 5, 6, 7, 8]
-    a.add(0.1, 0.2, 'm')
-    a.add(2, 3, 'm')
-    # a.show()
-    a.show()
+class RNNModelScratch: #@save
+    """从零开始实现的循环神经网络模型"""
+    def __init__(self, vocab_size, num_hiddens, device,
+                 get_params, init_state, forward_fn):
+        self.vocab_size, self.num_hiddens = vocab_size, num_hiddens
+        self.params = get_params(vocab_size, num_hiddens, device)
+        self.init_state, self.forward_fn = init_state, forward_fn
+
+    def __call__(self, X, state):
+        X = torch.nn.functional.one_hot(X.T, self.vocab_size).type(torch.float32)
+        return self.forward_fn(X, state, self.params)
+
+    def begin_state(self, batch_size, device):
+        return self.init_state(batch_size, self.num_hiddens, device)
+
+class RNNModel(torch.nn.Module):
+    def __init__(self, rnn_layer, vocab_size, **kwargs):
+        super(RNNModel, self).__init__(**kwargs)
+        self.rnn = rnn_layer
+        self.vocab_size = vocab_size
+        self.num_hiddens = rnn_layer.hidden_size
+        if not self.rnn.bidirectional:
+            self.num_directions = 1
+            self.liner = torch.nn.Linear(self.num_hiddens, vocab_size)
+        else:
+            self.num_directions = 2
+            self.liner = torch.nn.Linear(self.num_hiddens * 2, vocab_size)
+    def forward(self, inputs, state):
+        X = F.one_hot(inputs.T.long(), self.vocab_size)
+        X = X.to(torch.float32)
+        Y, state = self.rnn(X, state)
+        output = self.liner(Y.reshape((-1, Y.shape[-1])))
+        return output, state
+    def begin_state(self, device, batch_size = 1):
+        if not isinstance(self.rnn, torch.nn.LSTM):
+            return torch.zeros((self.num_directions * self.rnn.num_layers, batch_size, self.num_hiddens), device=device)
+        else:
+            return (torch.zeros((
+                self.num_directions * self.rnn.num_layers,
+                batch_size, self.num_hiddens), device=device),
+                    torch.zeros((
+                        self.num_directions * self.rnn.num_layers,
+                        batch_size, self.num_hiddens), device=device))
